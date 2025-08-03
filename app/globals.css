@@ -92,3 +92,19 @@
 .price-update-red {
   animation: pulse-red 0.5s ease-in-out;
 }
+
+/* Simulated order highlight animations */
+@keyframes simulated-order-glow {
+  0%, 100% { 
+    box-shadow: 0 0 5px rgba(252, 211, 77, 0.5);
+    background-color: rgba(252, 211, 77, 0.1);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(252, 211, 77, 0.8);
+    background-color: rgba(252, 211, 77, 0.2);
+  }
+}
+
+.simulated-order-highlight {
+  animation: simulated-order-glow 2s ease-in-out infinite;
+}

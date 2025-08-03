@@ -144,6 +144,7 @@ export default function Home() {
             <MarketDepthChart
               venue={selectedVenue}
               symbol={selectedSymbol}
+              simulatedOrder={simulatedOrder}
             />
           </TabsContent>
 
