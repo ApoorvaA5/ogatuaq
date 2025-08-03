@@ -61,7 +61,7 @@ export function OrderSimulationForm({
       symbol: selectedSymbol,
       type: orderType,
       side,
-      price: parseFloat(price),
+      price: orderType === 'limit' ? parseFloat(price) : (side === 'buy' ? 65005 : 65000), // Use market price for market orders
       quantity: parseFloat(quantity),
       timing
     };
@@ -75,7 +75,7 @@ export function OrderSimulationForm({
     }, 1000);
   };
 
-  const isFormValid = price && quantity && parseFloat(price) > 0 && parseFloat(quantity) > 0;
+  const isFormValid = quantity && parseFloat(quantity) > 0 && (orderType === 'market' || (price && parseFloat(price) > 0));
 
   return (
     <Card className="bg-gray-900 border-gray-800">
