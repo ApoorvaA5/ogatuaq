@@ -8,9 +8,10 @@ import { TrendingUp } from 'lucide-react';
 interface MarketDepthChartProps {
   venue: 'okx' | 'bybit' | 'deribit';
   symbol: string;
+  simulatedOrder?: any;
 }
 
-export function MarketDepthChart({ venue, symbol }: MarketDepthChartProps) {
+export function MarketDepthChart({ venue, symbol, simulatedOrder }: MarketDepthChartProps) {
   const { orderbook } = useOrderbookData(venue, symbol);
 
   // Transform orderbook data for depth chart
@@ -31,18 +32,45 @@ export function MarketDepthChart({ venue, symbol }: MarketDepthChartProps) {
       side: 'ask'
     }));
 
-    return [...bidsData.reverse(), ...asksData].sort((a, b) => a.price - b.price);
+    let combinedData = [...bidsData.reverse(), ...asksData].sort((a, b) => a.price - b.price);
+    
+    // Add simulated order to the chart data
+    if (simulatedOrder && simulatedOrder.type === 'limit') {
+      const simulatedPoint = {
+        price: simulatedOrder.price,
+        bidVolume: simulatedOrder.side === 'buy' ? simulatedOrder.quantity : 0,
+        askVolume: simulatedOrder.side === 'sell' ? simulatedOrder.quantity : 0,
+        side: simulatedOrder.side,
+        isSimulated: true
+      };
+      
+      combinedData.push(simulatedPoint);
+      combinedData = combinedData.sort((a, b) => a.price - b.price);
+    }
+    
+    return combinedData;
   };
 
   const depthData = getDepthData();
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const isSimulated = payload[0]?.payload?.isSimulated;
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-lg">
+        <div className={cn(
+          "border rounded-lg p-3 shadow-lg",
+          isSimulated ? "bg-yellow-900 border-yellow-600" : "bg-gray-800 border-gray-700"
+        )}>
+          {isSimulated && (
+            <p className="text-xs text-yellow-300 font-semibold mb-1">🎯 Simulated Order</p>
+          )}
           <p className="text-sm font-mono text-gray-300">{`Price: $${label}`}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className={`text-sm font-mono ${entry.dataKey === 'bidVolume' ? 'text-emerald-400' : 'text-red-400'}`}>
+            <p key={index} className={cn(
+              "text-sm font-mono",
+              entry.dataKey === 'bidVolume' ? 'text-emerald-400' : 'text-red-400',
+              isSimulated && "font-bold"
+            )}>
               {entry.dataKey === 'bidVolume' ? 'Bid' : 'Ask'} Volume: {entry.value.toFixed(4)}
             </p>
           ))}
@@ -58,6 +86,11 @@ export function MarketDepthChart({ venue, symbol }: MarketDepthChartProps) {
         <CardTitle className="flex items-center space-x-2">
           <TrendingUp className="h-5 w-5" />
           <span>Market Depth - {venue.toUpperCase()} {symbol}</span>
+          {simulatedOrder && (
+            <Badge variant="outline" className="text-yellow-400 border-yellow-400">
+              Order Simulated
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -93,6 +126,18 @@ export function MarketDepthChart({ venue, symbol }: MarketDepthChartProps) {
                 fill="#EF4444"
                 fillOpacity={0.3}
               />
+              {/* Highlight simulated order points */}
+              {simulatedOrder && simulatedOrder.type === 'limit' && (
+                <Area
+                  type="monotone"
+                  dataKey={simulatedOrder.side === 'buy' ? 'bidVolume' : 'askVolume'}
+                  stroke="#FCD34D"
+                  fill="#FCD34D"
+                  fillOpacity={0.6}
+                  strokeWidth={3}
+                  dot={{ fill: '#FCD34D', strokeWidth: 2, r: 6 }}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
