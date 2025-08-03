@@ -37,10 +37,13 @@ export function OrderbookViewer({
       key={`${side}-${price}`}
       className={cn(
         "grid grid-cols-3 py-1 px-2 text-sm relative overflow-hidden",
-        isSimulated && "ring-2 ring-yellow-400 bg-yellow-400/10",
+        isSimulated && "ring-2 ring-yellow-400 bg-yellow-400/20 animate-pulse",
         side === 'bid' ? "hover:bg-emerald-500/10" : "hover:bg-red-500/10"
       )}
     >
+      {isSimulated && (
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-400 animate-pulse" />
+      )}
       <div
         className={cn(
           "absolute inset-0 opacity-20",
@@ -54,15 +57,90 @@ export function OrderbookViewer({
       />
       <div className={cn(
         "relative z-10 font-mono",
-        side === 'bid' ? "text-emerald-400" : "text-red-400"
+        side === 'bid' ? "text-emerald-400" : "text-red-400",
+        isSimulated && "font-bold text-yellow-300"
       )}>
         {price.toFixed(2)}
       </div>
-      <div className="relative z-10 font-mono text-right">{size.toFixed(4)}</div>
-      <div className="relative z-10 font-mono text-right text-gray-400">{total.toFixed(4)}</div>
+      <div className={cn(
+        "relative z-10 font-mono text-right",
+        isSimulated && "font-bold text-yellow-300"
+      )}>
+        {size.toFixed(4)}
+      </div>
+      <div className={cn(
+        "relative z-10 font-mono text-right text-gray-400",
+        isSimulated && "font-bold text-yellow-300"
+      )}>
+        {total.toFixed(4)}
+      </div>
     </div>
   );
 
+  // Function to check if a price level should show the simulated order
+  const shouldShowSimulatedOrder = (price: number, side: 'bid' | 'ask') => {
+    if (!simulatedOrder || simulatedOrder.type === 'market') return false;
+    
+    const orderPrice = simulatedOrder.price;
+    const orderSide = simulatedOrder.side;
+    
+    // Only show on the correct side and at the exact price level
+    if (orderSide !== side) return false;
+    
+    // For limit orders, show at the exact price level
+    return Math.abs(price - orderPrice) < 0.01; // Small tolerance for floating point comparison
+  };
+
+  // Function to get simulated order data for a price level
+  const getSimulatedOrderData = (price: number, side: 'bid' | 'ask') => {
+    if (!shouldShowSimulatedOrder(price, side)) return null;
+    
+    return {
+      price: simulatedOrder.price,
+      size: simulatedOrder.quantity,
+      total: simulatedOrder.quantity // Simplified for visualization
+    };
+  };
+
+  // Function to render orderbook with simulated orders
+  const renderOrderbookSide = (levels: any[], side: 'bid' | 'ask', reverse = false) => {
+    const processedLevels = reverse ? [...levels].reverse() : levels;
+    const rows = [];
+    
+    for (let i = 0; i < processedLevels.length; i++) {
+      const level = processedLevels[i];
+      
+      // Add the regular level
+      rows.push(getOrderbookRow(level.price, level.size, level.total, side, false));
+      
+      // Check if we need to insert a simulated order after this level
+      if (simulatedOrder && simulatedOrder.type === 'limit') {
+        const orderPrice = simulatedOrder.price;
+        const orderSide = simulatedOrder.side;
+        
+        if (orderSide === side) {
+          const currentPrice = level.price;
+          const nextPrice = processedLevels[i + 1]?.price;
+          
+          let shouldInsert = false;
+          
+          if (side === 'bid') {
+            // For bids, insert if order price is between current and next level (descending order)
+            shouldInsert = orderPrice < currentPrice && (!nextPrice || orderPrice > nextPrice);
+          } else {
+            // For asks, insert if order price is between current and next level (ascending order)
+            shouldInsert = orderPrice > currentPrice && (!nextPrice || orderPrice < nextPrice);
+          }
+          
+          if (shouldInsert) {
+            rows.push(getOrderbookRow(orderPrice, simulatedOrder.quantity, simulatedOrder.quantity, side, true));
+          }
+        }
+      }
+    }
+    
+    return rows;
+  };
   return (
     <Card className="bg-gray-900 border-gray-800">
       <CardHeader>
@@ -120,9 +198,7 @@ export function OrderbookViewer({
 
           {/* Asks (sells) */}
           <div className="space-y-0">
-            {orderbook?.asks?.slice(0, 15).reverse().map((ask, index) =>
-              getOrderbookRow(ask.price, ask.size, ask.total, 'ask')
-            )}
+            {orderbook?.asks ? renderOrderbookSide(orderbook.asks.slice(0, 15), 'ask', true) : []}
           </div>
 
           {/* Spread */}
@@ -135,12 +211,49 @@ export function OrderbookViewer({
 
           {/* Bids (buys) */}
           <div className="space-y-0">
-            {orderbook?.bids?.slice(0, 15).map((bid, index) =>
-              getOrderbookRow(bid.price, bid.size, bid.total, 'bid')
-            )}
+            {orderbook?.bids ? renderOrderbookSide(orderbook.bids.slice(0, 15), 'bid', false) : []}
           </div>
         </div>
 
+        {/* Simulated Order Info */}
+        {simulatedOrder && (
+          <div className="mt-4 p-3 bg-yellow-900/30 border border-yellow-600 rounded-lg">
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-3 h-3 bg-yellow-400 rounded animate-pulse" />
+              <span className="text-yellow-300 font-semibold text-sm">Simulated Order</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-gray-400">Type:</span>
+                <span className="ml-2 font-mono text-yellow-300">{simulatedOrder.type.toUpperCase()}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Side:</span>
+                <span className={cn(
+                  "ml-2 font-mono font-semibold",
+                  simulatedOrder.side === 'buy' ? "text-emerald-400" : "text-red-400"
+                )}>
+                  {simulatedOrder.side.toUpperCase()}
+                </span>
+              </div>
+              {simulatedOrder.type === 'limit' && (
+                <div>
+                  <span className="text-gray-400">Price:</span>
+                  <span className="ml-2 font-mono text-yellow-300">${simulatedOrder.price}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-400">Quantity:</span>
+                <span className="ml-2 font-mono text-yellow-300">{simulatedOrder.quantity}</span>
+              </div>
+            </div>
+            {simulatedOrder.type === 'market' && (
+              <div className="mt-2 text-xs text-yellow-200">
+                Market orders execute immediately at best available prices
+              </div>
+            )}
+          </div>
+        )}
         {lastUpdate && (
           <div className="mt-4 text-xs text-gray-500 text-center">
             Last update: {new Date(lastUpdate).toLocaleTimeString()}
